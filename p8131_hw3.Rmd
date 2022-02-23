@@ -11,25 +11,91 @@ library(tidyverse)
 
 ## Problem 1
 
-### a) Fit a prospective model to the data to study the relation consumption, age, and disease. Interpret the result.
+### (a) Fit a prospective model to the data to study the relation consumption, age, and disease. Interpret the result.
 
 Model age as a continuous variable taking values 25, 35, 45, 55, 65, and 75
 
 ```{r input, echo=FALSE}
-data1 = tibble(age = c(25, 35, 45, 55, 65, 75), case_0_79 = c(0, 5, 21, 34, 36, 8), 
-               case_80 = c(1, 4, 25, 42, 19, 5), control_0_79 = c(106, 164, 138, 139, 88, 31),
+data1 = tibble(age = c(25, 35, 45, 55, 65, 75), 
+               case_0_79 = c(0, 5, 21, 34, 36, 8), 
+               case_80 = c(1, 4, 25, 42, 19, 5), 
+               control_0_79 = c(106, 164, 138, 139, 88, 31),
                control_80 = c(9, 26, 29, 27, 18, 0))
 data1
 ```
 
+n_1 = total case, n_0 total control, z_1 case_80, z_0 control_80
 
+Fit a logit model:
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r logit}
+# Fit GLM
+fit.logit = glm(cbind(case_80, control_80) ~ age, family = binomial(link = 'logit'),
+          data = data1)
+fit.logit$coefficients
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The model gives us $\alpha^* = -3.27242625$, and $\beta = 0.06214693$. So the model is 
+$$P(D = 1|X, S= 1) = \frac{e^{-3.27242625 + 0.06214693x}}{1+ e^{-3.27242625 + 0.06214693x}}$$
+The odds ratio of disease corresponding to unit change in different covariates is:
+
+```{r}
+exp(coef(summary(fit.logit))[2])
+```
+
+The model means that for a one year increase in age, we expect to see 6.41% increase in the odds of having more than 80g daily alcohol consumption among group with esophageal cancer, comparing with non-esophageal cancer group. 
+
+### (b) Comparing odds ratio between age groups
+
+Two Model: $M_0: \psi_j=1$ for all j, and $M_1: \psi_j = \psi$:
+
+```{r model_odds}
+# Add group j index 1 - 6
+data1["age_group"] = c("1", "2", "3", "4", "5", "6")
+
+# Build Model 0, only the intercept is used
+M0 = glm(cbind(case_80, control_80) ~ 1, family = binomial(link = 'logit'),
+          data = data1)
+# Build Model 1
+M1 = glm(cbind(case_80, control_80) ~ age_group, family = binomial(link = 'logit'),
+          data = data1)
+
+summary(M0)
+summary(M1)
+```
+
+Check if they are nested:
+
+```{r nested}
+M0$coefficients
+M1$coefficients
+```
+
+$M_0$ is nested in $M_1$ because it only contains the intercept. 
+
+Use Deviance Analysis to compare the two model:
+
+$H_0: \beta_j = 0$, $H_1: \beta_j \neq 0$, for $j = 1, 2, 3, 4, 5$
+
+```{r devi}
+# Deviance
+dev0 = M0$deviance
+dev1 = M1$deviance
+p2 = M1$df.null - M1$df.residual;p2
+# D_0 - D_1 ~ Chisquare(df=p2)
+pchisq(dev0-dev1, p2, lower.tail = FALSE)
+```
+
+The deviance of $M_0$ is $35.10683$, and the deviance of $M_1$ is approximately 0. The number of predictors of $M_1$ is 5. Therefore we get a p-value of 1.432565e-06 < 0.05 and we reject the null hypothesis. $M_1$ better fits the data. 
+
+## Problem 2
+
+### (a) Fit a logistic regression model to study the relation between germination rates and different types of seed and root extract. Interpret the result
+
+```{r p2a}
+
+```
+
+### (b) Is there over dispersion? If so, what is the estimate of dispersion parameter? Update your model and reinterpret the result.
+
+### (c) What is a plausible cause of the over dispersion?
