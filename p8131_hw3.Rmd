@@ -13,37 +13,45 @@ library(tidyverse)
 
 ### (a) Fit a prospective model to the data to study the relation consumption, age, and disease. Interpret the result.
 
-Model age as a continuous variable taking values 25, 35, 45, 55, 65, and 75
+This is a retrospective study i.e. case-control study. We therefore model $(Z_1, n_1)$ and $(Z_0, n_0)$ with age, diseased status as predictors. Model age as a continuous variable taking values 25, 35, 45, 55, 65, and 75:
 
 ```{r input, echo=FALSE}
-data1 = tibble(age = c(25, 35, 45, 55, 65, 75), 
-               case_0_79 = c(0, 5, 21, 34, 36, 8), 
-               case_80 = c(1, 4, 25, 42, 19, 5), 
-               control_0_79 = c(106, 164, 138, 139, 88, 31),
-               control_80 = c(9, 26, 29, 27, 18, 0))
+data1 = tibble(age = c(25, 35, 45, 55, 65, 75, 25, 35, 45, 55, 65, 75), 
+               diseased = c(1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0),
+               exposed = c(1, 4, 25, 42, 19, 5, 9, 26, 29, 27, 18, 0),  
+               unexposed = c(0, 5, 21, 34, 36, 8, 106, 164, 138, 139, 88, 31))
 data1
 ```
-
-n_1 = total case, n_0 total control, z_1 case_80, z_0 control_80
 
 Fit a logit model:
 
 ```{r logit}
 # Fit GLM
-fit.logit = glm(cbind(case_80, control_80) ~ age, family = binomial(link = 'logit'),
-          data = data1)
-fit.logit$coefficients
+# Exposed v.s. Unexposed
+fit.logit = glm(cbind(exposed, unexposed) ~ diseased + age, family = binomial(link = 'logit'), data = data1)
+summary(fit.logit)
 ```
 
-The model gives us $\alpha^* = -3.27242625$, and $\beta = 0.06214693$. So the model is 
-$$P(D = 1|X, S= 1) = \frac{e^{-3.27242625 + 0.06214693x}}{1+ e^{-3.27242625 + 0.06214693x}}$$
+The model gives us $\alpha_0 = -1.7727683803$, and $\alpha_1 = 1.7381305722$, $\alpha_2 = -0.0008151921$. So the logit model is $log(\frac{\rho}{1-\rho}) = \alpha_0 + \alpha_1D + \alpha_2Age$, $D = (0, 1)$. Note that the age variable has a very large p-value so it is not significant for response prediction in this case (this happens because we treated as continuous variable).
+
+Then the model of alcohol consumption with respect to age and disease is given by:
+$$P(E = Exposure |D = Disease, X = Age) = \frac{e^{-1.7727683803 + 1.7381305722D-0.0008151921x}}{1+ e^{-1.7727683803 + 1.7381305722D-0.0008151921x}}$$
 The odds ratio of disease corresponding to unit change in different covariates is:
 
 ```{r}
+# odds of E given no disease (control)
+exp(coef(summary(fit.logit))[1])
+# odds of E between case and control group
 exp(coef(summary(fit.logit))[2])
+# odds of E given age
+exp(coef(summary(fit.logit))[3])
 ```
 
-The model means that for a one year increase in age, we expect to see 6.41% increase in the odds of having more than 80g daily alcohol consumption among group with esophageal cancer, comparing with non-esophageal cancer group. 
+The model means that the odds of exposure to daily alcohol consumption of 80+g is 0.1698621 given the person does not have esophageal cancer. 
+
+And the odds of exposure to daily alcohol consumption of 80+g for people with esophageal cancer is 5.686703 times the odds of people without esophageal cancer. 
+
+Also, for a one year increase in age, the odds of exposure to daily alcohol consumption of 80+g for people with esophageal cancer is 0.9991851 times the odds of exposure of people without esophageal cancer.
 
 ### (b) Comparing odds ratio between age groups
 
@@ -51,13 +59,13 @@ Two Model: $M_0: \psi_j=1$ for all j, and $M_1: \psi_j = \psi$:
 
 ```{r model_odds}
 # Add group j index 1 - 6
-data1["age_group"] = c("1", "2", "3", "4", "5", "6")
+data1["age_group"] = as.factor(c("1", "2", "3", "4", "5", "6", "1", "2", "3", "4", "5", "6"))
 
 # Build Model 0, only the intercept is used
-M0 = glm(cbind(case_80, control_80) ~ 1, family = binomial(link = 'logit'),
+M0 = glm(cbind(exposed, unexposed) ~ age_group, family = binomial(link = 'logit'),
           data = data1)
 # Build Model 1
-M1 = glm(cbind(case_80, control_80) ~ age_group, family = binomial(link = 'logit'),
+M1 = glm(cbind(exposed, unexposed) ~ diseased + age_group, family = binomial(link = 'logit'),
           data = data1)
 
 summary(M0)
@@ -75,7 +83,7 @@ $M_0$ is nested in $M_1$ because it only contains the intercept.
 
 Use Deviance Analysis to compare the two model:
 
-$H_0: \beta_j = 0$, $H_1: \beta_j \neq 0$, for $j = 1, 2, 3, 4, 5$
+$H_0: \beta_j = 0$, $H_1: \beta_j \neq 0$, for $j = 1, 2, 3, 4, 5, 6$
 
 ```{r devi}
 # Deviance
@@ -83,19 +91,109 @@ dev0 = M0$deviance
 dev1 = M1$deviance
 p2 = M1$df.null - M1$df.residual;p2
 # D_0 - D_1 ~ Chisquare(df=p2)
-pchisq(dev0-dev1, p2, lower.tail = FALSE)
+diff = dev0 - dev1;diff
+pchisq(diff, p2, lower.tail = FALSE)
 ```
 
-The deviance of $M_0$ is $35.10683$, and the deviance of $M_1$ is approximately 0. The number of predictors of $M_1$ is 5. Therefore we get a p-value of 1.432565e-06 < 0.05 and we reject the null hypothesis. $M_1$ better fits the data. 
+The difference between deviance of $M_0$ and $M_1$ is $79.52203$. The number of predictors of $M_1$ is 6. Therefore we get a very small p-value and we reject the null hypothesis. $M_1$ better fits the data. 
 
 ## Problem 2
 
 ### (a) Fit a logistic regression model to study the relation between germination rates and different types of seed and root extract. Interpret the result
 
 ```{r p2a}
-
+data2 = tibble(species = c("o_a_75", "o_a_75", "o_a_75", "o_a_75", "o_a_75", 
+                           "o_a_75", "o_a_75", "o_a_75", "o_a_75", "o_a_75", "o_a_75", 
+                           "o_a_73", "o_a_73", "o_a_73", "o_a_73", "o_a_73", "o_a_73", 
+                           "o_a_73", "o_a_73", "o_a_73", "o_a_73"),
+               rootMedia = c("b", "b", "b", "b", "b", 
+                             "c", "c", "c", "c", "c", "c", 
+                             "b", "b", "b", "b", "b", 
+                             "c", "c", "c", "c", "c"),
+               germ = c(10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3),
+               total = c(39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7))
+data2
 ```
+
+Fit the model
+
+```{r model_fit}
+# Build Model
+fit.logit2 = glm(cbind(germ, total-germ) ~ species + rootMedia, family = binomial(link = 'logit'),
+          data = data2)
+summary(fit.logit2)
+```
+
+The model gives us $\alpha = -0.7005$, and $\beta_1 = 0.2705$, $\beta_2 = 1.0647$. So the model is 
+$$P(Germinated = 1 | X_1 = x_1, X_2 = x_2) = \frac{e^{-0.7005 + 0.2705x_1 + 1.0647x_2}}{1+ e^{-0.7005 + 0.2705x_1 + 1.0647x_2}}$$
+where $X_1$ indicates the species of the Orobanche seeds (1 = O. aegyptiaca 75, 0 = O. aegyptiaca 73), $X_2$ indicates the root extract media (1 = cucumber, 0 = bean). The risk ratio (RR) of disease corresponding to unit change in different covariates is:
+
+```{r cov}
+exp(coef(summary(fit.logit2))[1])
+# for species
+exp(coef(summary(fit.logit2))[2])
+# for root extract media RR
+exp(coef(summary(fit.logit2))[3])
+# for root extract = c, species = 75
+exp(coef(summary(fit.logit2))[2] + coef(summary(fit.logit2))[3])
+```
+
+The model means that for a O. aegyptiaca 73 seed in bean root extract media, it has 0.4963454 germination rate. 
+
+And $e^{\beta_1}=1.310555$, meaning that using bean as the root extract media, a O. aegyptiaca 75 seed is expected to have a gernimation rate of 1.31 times the germination rate of a O. aegyptiaca 73 seed. 
+
+$e^{\beta_2}=2.900113$ means that for O. aegyptiaca 73 seed, cucumbers root media makes the seed to have a gernimation rate of 2.900113 times the germination rate of the seed with beans root media. 
+
+And for a O. aegyptiaca 75 seed using cucumbers root media, it has 3.800759 times the germination rate of a O. aegyptiaca 73 seed in bean root extract media. 
 
 ### (b) Is there over dispersion? If so, what is the estimate of dispersion parameter? Update your model and reinterpret the result.
 
+check for overdispersion using half normal plot:
+
+```{r}
+r = abs(residuals(fit.logit2, type = 'pearson'))
+# n = 21
+x = 1:21
+# x axis is inverse normal
+x = qnorm((21 + x + 0.5)/(21*2 + 1.125))
+
+plot_num = tibble(x = x, y = r)
+plot_num %>% ggplot(aes(x = x, y = y)) + 
+  geom_point() +
+  geom_smooth(method = "lm", aes(color = "red")) +
+  geom_abline(slope = 1) +
+  labs(
+    title = "Half Normal plot",
+    x = "X",
+    y = "Absolute value of Pearson residuals")
+```
+
+The distribution of points is clearly off the reference line of slope = 1, this indicates constant overdispersion. 
+
+The estimate of the dispersion parameter $\phi$ is:
+
+```{r phi}
+G.0 = sum(residuals(fit.logit2, type = 'pearson')^2)
+# degree of freedom is 21 - 3
+phi = G.0/(21 - 3);phi
+```
+
+The estimated dispersion $\phi$ is 2.128368, so there is indeed overdispersion.
+
+Update the model and reinterpret the result:
+
+```{r update}
+summary(fit.logit2, dispersion = phi)
+```
+
+
+After adjusting for the dispersion parameter, the coefficients of the model did not change, but the sample error has increased for each parameter. 
+
+For the odds of germination for a O. aegyptiaca 73 seed in bean root extract media, the SE increased from 0.1507 to 0.2199, and the odds of germination for a O. aegyptiaca 75 seed using bean as the root extract media, the SE increased from 0.1547 to 0.2257. 
+For odds of germination of O. aegyptiaca 73 seed in cucumbers root media, the SE increased from 0.1442 to 0.2104. 
+
 ### (c) What is a plausible cause of the over dispersion?
+
+Over-dispersion indicates that the germination rate does not follow our hypothetical binomial distribution. There might be intra-class correlation in each seed set. For example, some seeds germinated first and occupy the resource of the media so others are less likely to germinate later. The germination rate could be correlated to source of supply, so there is hierarchichal sampling effect between some set of seeds. For example, O. aegyptiaca 75 seeds collected from one specific supplier are lessly like to germinate than others.
+
+
